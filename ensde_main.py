@@ -4,16 +4,15 @@ import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
 import numpy as np
-# import matplotlib.pyplot as plt
 from edl_module import edl_network,loss_function
 from sde_module import SDEFunc
 from embedding_module import emb_network
-# from plot_figures import plot_fig
 import torchsde
 import os
 import pickle
-path=os.getcwd()
 import random
+path=os.getcwd()
+
 
 #Args setup
 parser = argparse.ArgumentParser('E-NSDE Recommendation')
@@ -51,7 +50,7 @@ if __name__ == '__main__':
     train_users=list(set([usr for usr in range(len(data))])-set(test_users))
 
     # Define embedding model
-    latent_dim = 64
+    latent_dim = 64 #128,256
     uniq_user=943
     uniq_items=1682
     emb_model = emb_network(uniq_user, uniq_items, latent_dim).to(device)
@@ -83,7 +82,7 @@ if __name__ == '__main__':
 
 
     #Time interval
-    t_size=1
+    t_size=2
     ts=torch.linspace(0, 1, t_size)
     mse = torch.nn.MSELoss()
     topk=5
@@ -227,89 +226,6 @@ if __name__ == '__main__':
                 final_loss=[]
                 print('Done for User {} with Total Loss:{}'.format(indx,loss_back))
 
-
-        # #Test time: Evaluate the test users
-        neg_length=100
-        prec = 0
-        ndcg = 0
-        print('\nEvaluating.....')
-        for indx,u in enumerate(test_users):
-            itms=[itm[0] for itm in data[u]][init_num:]
-            rating = [rat[1] for rat in data[u]][init_num:]
-            items = [itm[0] for itm in data[u]][init_num:-1]
-            interaction_time = [y[2] for y in data[u]][init_num:]
-            target = itms[-1]
-            negative_items = list(set([i for i in range(uniq_items)]) - set([itm[0] for itm in data[u]]))[:neg_length]
-            u = torch.tensor(u).to(device)
-            # negative_items = torch.tensor(negative_items).to(device)
-
-            #time
-            interaction_t = [time - interaction_time[0] for time in interaction_time]
-            integration_time=torch.tensor([interaction_t[0]/max(interaction_t),interaction_t[len(interaction_t)-2]/max(interaction_t)]).float().to(device)
-            time_diff = [0] + [interaction_time[i + 1] - interaction_time[i] + 0.00001 for i in
-                               range(len(interaction_time) - 1)]
-            time_diff = torch.tensor(time_diff).float().to(device)
-            time_diff = time_diff / max(time_diff)
-
-
-            # Call embedding models
-            # user_emb, item_emb = emb_model.forward(u, negative_items)
-            user_emb = emb_model.user(u)
-            init_items_rep=[]
-            for itm in items[:init_num]:
-                init_items_rep.append(itm_emb_sde_rep[itm])
-
-            user_emb=torch.mean(torch.stack([torch.mean(torch.stack(init_items_rep,dim=0),dim=0),user_emb.view(1,latent_dim)]),dim=0)
-
-            # Call User SDE module
-            user_emb_sde = sdeint(sde_model_user, user_emb.view(1, latent_dim), integration_time)
-            user_emb_sde=user_emb_sde[-1]
-
-            total_items=[target]+negative_items
-            itm_emb_sde = []
-
-            for itm in items[init_num:-1]:
-                user_emb_sde=torch.mean(torch.stack([user_emb_sde,itm_emb_sde_rep[itm]]),dim=0)
-
-            for item in total_items:
-                itm_emb_sde.append(itm_emb_sde_rep[item])
-
-            # itm_emb_sde = []
-            # for item in negative_items:
-            #     itm_emb_sde.append(itm_emb_sde_rep[item])
-
-            # for item in item_emb:
-            #     itm_emb_out = sdeint(sde_model_item, item.view(1, latent_dim), ts)
-            #     itm_emb_sde.append(itm_emb_out[-1])
-
-            itm_emb_neg = torch.stack(itm_emb_sde, dim=0)
-
-            #target item positive
-            # itm_emb_all=itm_emb_sde_rep[target]+itm_emb_sde #target plus negative
-            # itm_emb_all = torch.stack(itm_emb_all, dim=0)
-            # item_e=emb_model.item(torch.tensor([target]))
-            # itm_emb_pos = sdeint(sde_model_item, item_e.view(1, latent_dim), ts)
-
-
-            # concat user and item embed
-            # edl_data = torch.cat((user_emb_sde.view(-1,latent_dim).expand(len(itm_emb_all), -1), itm_emb_all[:, -1, :]), dim=1)
-            # edl_data = torch.cat((user_emb_sde, itm_emb_pos[:, -1, :]), dim=1)
-            neg_data = torch.cat((user_emb_sde.view(-1,latent_dim).expand(len(itm_emb_neg), -1), itm_emb_neg[:, -1, :]), dim=1)
-            gamma, beta, alpha, v, negative_rating, a, nu, b = edl_model.forward(neg_data, neg_data, time_diff[-1])
-
-            # prediction= -np.append(gamma.view(-1).detach().cpu().numpy(),negative_rating.view(-1).detach().cpu().numpy())
-            prediction = -gamma.view(-1).detach().cpu().numpy()
-            rank=prediction.argsort().argsort()[0].item()
-
-            if rank<topk:
-                prec += 1
-                ndcg += 1 / torch.log2(torch.tensor(rank + 2))
-
-            if indx%20==1:
-                print('Done Testing for {} Users and Prec:{} and NDCG :{}'.format(indx,prec,ndcg))
-        # prec_temp.append(prec / len(train_users+test_users))
-        # ndcg_temp.append(ndcg / len(train_users+test_users))
-
         print('\n\n=================================')
-        print('Epoch {} Training Loss={}, and Test P@5={} N@5={}'.format(itr, torch.mean(torch.stack(train_loss)),prec / len(test_users),ndcg / len(test_users)))
+        print('Epoch {} Training Loss={}'.format(itr, torch.mean(torch.stack(train_loss))))
         print('=================================\n')
