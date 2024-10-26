@@ -179,7 +179,7 @@ if __name__ == '__main__':
             for time in time_interval:
                 time_compute = torch.tensor([time]*2).float().to(device)
                 total_uncertainty = time_simulation.compute_simulation(edl_data.data[:2], neg_data.data[:2],time_compute)
-                print(total_uncertainty)
+            
 
             # edl_data = torch.cat((user_emb_sde.view(-1, latent_dim).expand(len(itm_emb_pos), -1), itm_emb_pos[:,-1,:]), dim=1)
             # neg_data = torch.cat((user_emb_sde.view(-1, latent_dim).expand(len(itm_emb_neg), -1), itm_emb_neg[:, -1, :]), dim=1)
